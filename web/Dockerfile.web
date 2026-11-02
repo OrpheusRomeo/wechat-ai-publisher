@@ -1,0 +1,62 @@
+# 前端构建镜像 (多阶段, 产物写入 /out 命名卷)
+#
+# 用法 (docker-compose v2):
+#   build:
+#     context: ./web
+#     dockerfile: Dockerfile.web
+#   volumes:
+#     - web_dist:/out
+#   command: ["cp", "-r", "/dist/.", "/out/"]
+
+# ---- Stage 1: deps ----
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+# 利用 BuildKit 缓存: package.json 单独 COPY, 不变时这层直接命中缓存
+COPY package.json ./
+COPY package-lock.json* ./
+
+# 国内镜像
+RUN npm config set registry https://registry.npmmirror.com \
+    && npm install --no-audit --no-fund --prefer-offline \
+    && npm cache clean --force
+
+# ---- Stage 2: build ----
+FROM node:20-alpine AS build
+WORKDIR /app
+
+# 构建时间戳: 通过 --build-arg 注入, 写入产物, 让前端右下角显示
+# 不传时 fallback 到当前 UTC 时间 (本地构建场景)
+# 推荐通过 scripts/build_web_docker.sh 显式传入 BUILD_TIMESTAMP + GIT_*,
+# 比 docker-compose args 更可靠 (后者不支持 shell 命令替换)
+ARG BUILD_TIMESTAMP
+ARG GIT_COMMIT=unknown
+ARG GIT_BRANCH=unknown
+ARG GIT_MSG=""
+
+RUN if [ -z "$BUILD_TIMESTAMP" ]; then \
+      BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+    fi && \
+    echo "BUILD_TIMESTAMP=$BUILD_TIMESTAMP" && \
+    echo "GIT_COMMIT=$GIT_COMMIT GIT_BRANCH=$GIT_BRANCH"
+
+ENV BUILD_TIMESTAMP=$BUILD_TIMESTAMP
+ENV GIT_COMMIT=$GIT_COMMIT
+ENV GIT_BRANCH=$GIT_BRANCH
+ENV GIT_MSG=$GIT_MSG
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
+COPY package-lock.json* ./
+COPY vite.config.ts ./
+COPY tsconfig.json ./
+COPY tsconfig.node.json ./
+COPY index.html ./
+COPY src ./src
+
+RUN npm config set registry https://registry.npmmirror.com \
+    && npm run build \
+    && ls -la dist
+
+# 镜像默认入口: 把 dist 复制到挂载的 /out
+CMD ["sh", "-c", "cp -r /app/dist/. /out/ && echo 'Web build copied to /out'"]
