@@ -8,7 +8,7 @@
     <!-- 统计卡片 -->
     <el-row :gutter="24" class="stat-cards">
       <el-col :span="6">
-        <div class="stat-card stat-card-primary" @click="$router.push('/ip-whitelist')">
+        <div class="stat-card stat-card-primary" @click="$router.push('/articles/hot-report')">
           <div class="stat-icon">
             <el-icon><TrendCharts /></el-icon>
           </div>
