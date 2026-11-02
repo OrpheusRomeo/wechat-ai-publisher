@@ -113,7 +113,9 @@ bash scripts/deploy.sh          # 等价于 docker compose up -d
 | ReDoc | http://localhost:8888/redoc |
 | Kafka UI | http://localhost:9090 |
 
-默认管理员由迁移 `0004_admin_config_tables` 写入：**`admin` / `admin123`**。
+默认管理员由迁移 `0004_admin_config_tables` 写入，用户名固定为 `admin`，密码取自 `.env` 的
+`ADMIN_DEFAULT_PASSWORD`（未设置时为 `admin123`，**仅限开发环境**）。生产部署务必在 `.env`
+里设置一个强密码。
 登录后请立即在「个人资料 → 修改密码」里改掉；`ADMIN_DEFAULT_PASSWORD` 保持默认时会持续输出安全警告。
 
 启用 Nginx：

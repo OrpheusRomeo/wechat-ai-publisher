@@ -2,7 +2,7 @@
 # app/core/config.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator, model_validator
-from typing import Optional, List
+from typing import List
 from functools import lru_cache
 
 class Settings(BaseSettings):
@@ -60,47 +60,23 @@ class Settings(BaseSettings):
         description="信任的反向代理 IP, 逗号分隔 (用于 X-Forwarded-For 解析)",
     )
 
-    # 默认管理员密码（仅首次启动无管理员时使用，登录后可修改）
-    # ⚠️ 安全警告: 默认密码 "admin123" 仅限开发/演示环境使用!
-    # 生产环境必须通过 ADMIN_DEFAULT_PASSWORD 环境变量设置强密码,
-    # 检测到默认密码时会在登录响应中发出安全警告
+    # 初始管理员密码（仅首次初始化时写入 DB 用，登录后可修改）
+    # ⚠️ 安全警告: 默认值 "admin123" 仅限开发/演示环境使用!
+    # 生产环境必须通过 ADMIN_DEFAULT_PASSWORD 环境变量设置强密码。
+    #
+    # 该值同时用于两处:
+    # 1. ``alembic`` 初始迁移把 admin 账号的密码哈希成这个值写入
+    #    ``admin_users`` 表 (见 ``app/core/security.py:hash_password``)
+    # 2. 登录时检测"用户仍在用初始密码"并发出安全警告
     admin_default_password: str = Field(
         default="admin123",
-        description="首次启动时的默认管理员密码",
+        description="初始管理员密码（首次初始化写入 DB 用）",
     )
 
     @property
     def is_using_default_password(self) -> bool:
-        """检测是否使用了默认密码 (不安全)。"""
+        """检测是否使用了出厂默认密码 (不安全)。"""
         return self.admin_default_password == "admin123"
-
-    # 默认密码的 bcrypt 哈希（缓存一次计算，供登录时检测用户是否使用默认密码）
-    # 不放在 Field 中直接做 default，因为 bcrypt.hashpw 有一定开销，
-    # 应延迟到首次使用时计算并缓存。
-    _cached_default_pw_hash: Optional[str] = None
-
-    @property
-    def default_password_hash(self) -> Optional[str]:
-        """返回默认管理员密码的 bcrypt 哈希，缓存计算结果。
-
-        仅当 admin_default_password 仍为默认值 "admin123" 时才返回哈希
-        （此时需要向用户发出安全警告）；若已改为其他值则返回 None，
-        表示部署者已更换密码，无需再比较。
-        """
-        if self._cached_default_pw_hash is not None:
-            return self._cached_default_pw_hash
-        # 仅当使用默认值时才缓存；显式设置了其他密码则跳过检测
-        if self.admin_default_password != "admin123":
-            return None
-        import bcrypt
-        # bcrypt.hashpw 的第二个参数是 salt，gensalt() 每次生成随机 salt。
-        # 由于结果 hash 中已包含 salt，只要比较时 salt 正确就能 work，
-        # 所以只需缓存最终 hash 即可，每次登录只做一次 checkpw。
-        self._cached_default_pw_hash = bcrypt.hashpw(
-            self.admin_default_password.encode(),
-            bcrypt.gensalt(),
-        ).decode()
-        return self._cached_default_pw_hash
 
     # PII 日志脱敏 salt (#10): 不同部署用不同 salt,
     # 跨部署的 openid 散列无法关联, 降低日志聚合后的 PII 风险

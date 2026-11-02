@@ -11,6 +11,7 @@
 - 素材 / token 的 Redis key 按公众号隔离
 - 「建草稿 → 群发」的状态映射 (published / draft) 与 48001、45009 分支
 - 管理后台 system_settings 覆盖到运行时 settings
+- 管理员初始密码: bcrypt 哈希不能用 == 比较 (加盐随机), 必须用 checkpw
 
 不需要 PG / Redis / Kafka / 微信凭证。
 """
@@ -522,3 +523,62 @@ def test_runtime_override_ignores_dead_keys(key):
     from app.core.runtime_overrides import _OVERRIDABLE
 
     assert key not in _OVERRIDABLE
+
+
+# =============================================================================
+# 管理员初始密码
+# =============================================================================
+
+def test_bcrypt_hash_comparison_never_matches():
+    """回归: bcrypt 每次加盐结果不同, 用 == 比较哈希永远为 False。
+
+    旧代码在登录时用 ``user.password_hash == settings.default_password_hash``
+    判断"用户仍在用默认密码"，该判断恒为 False → 安全告警从未触发过。
+    """
+    from app.core.security import hash_password
+
+    h1 = hash_password("same-password")
+    h2 = hash_password("same-password")
+    assert h1 != h2, "同明文的两次 bcrypt 哈希必须不同（随机 salt）"
+    # 这就是旧代码的比较方式 —— 永远 False
+    assert (h1 == h2) is False
+
+
+def test_verify_password_detects_default_password():
+    """正确的检测方式: checkpw 而非哈希字符串比较。"""
+    from app.core.security import hash_password, verify_password
+
+    h = hash_password("admin123")
+    assert verify_password("admin123", h) is True
+    assert verify_password("wrong-password", h) is False
+
+
+def test_admin_default_password_is_configurable(monkeypatch):
+    """ADMIN_DEFAULT_PASSWORD 决定 DB 里 admin 账号的初始密码。
+
+    旧实现把它硬编码成 "admin123"（迁移里 hash_password("admin123")），
+    改 .env 对已有 DB 毫无作用。
+    """
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "admin_default_password", "MyStrongPw!2026")
+    assert settings.admin_default_password == "MyStrongPw!2026"
+    # 非出厂默认值时不再视为"正在使用默认密码"
+    assert settings.is_using_default_password is False
+
+
+def test_is_using_default_password_detects_factory_value(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "admin_default_password", "admin123")
+    assert settings.is_using_default_password is True
+
+
+def test_default_password_hash_is_removed():
+    """``default_password_hash`` 已移除 —— 它鼓励用 == 比较 bcrypt 哈希。
+
+    登录告警现在直接用 ``verify_password(settings.admin_default_password, ...)``。
+    """
+    from app.core.config import Settings
+
+    assert not hasattr(Settings, "default_password_hash")

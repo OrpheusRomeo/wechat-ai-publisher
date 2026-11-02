@@ -47,7 +47,8 @@ bash scripts/deploy.sh --web
 | Kafka UI | http://localhost:9090 |
 | 管理后台 | http://localhost （需 `--web` / `with-nginx` profile） |
 
-管理后台默认账号：**`admin` / `admin123`**，首次登录后请立即修改密码。
+管理后台默认账号：用户名为 `admin`，密码取自 `.env` 的 `ADMIN_DEFAULT_PASSWORD`
+（未设置时为 `admin123`，**仅限开发环境**）。首次登录后请立即修改密码。
 
 ## 包含 Nginx 反向代理
 
@@ -177,7 +178,7 @@ curl -X POST http://localhost:8888/api/v1/topics/crawl
 - [ ] 打开 http://localhost:8888/docs 看到完整接口列表
 - [ ] 调用 POST /api/v1/topics/crawl 后在 celery-worker 日志看到 "保存 N 条新话题"
 - [ ] 配置好真实的 WECHAT_* 后能在 consumer-push 日志看到推送结果
-- [ ] 登录 http://localhost 管理后台（admin / admin123），确认平台账号与 LLM 配置可正常读写
+- [ ] 登录 http://localhost 管理后台（admin / `$ADMIN_DEFAULT_PASSWORD`），确认平台账号与 LLM 配置可正常读写
 
 ## 如果你不用 Docker
 

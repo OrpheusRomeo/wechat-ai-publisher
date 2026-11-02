@@ -77,9 +77,14 @@ def upgrade() -> None:
     )
     op.create_index("ix_ip_whitelist_ip", "ip_whitelist", ["ip_or_cidr"], unique=True)
 
-    # 5) 初始化默认管理员 (admin / admin123)
+    # 5) 初始化默认管理员 (admin / <ADMIN_DEFAULT_PASSWORD>)
+    #
+    # 密码来自 ADMIN_DEFAULT_PASSWORD 环境变量（由 app.core.config 读取），
+    # 部署者可通过 .env 设置强密码，不必再改代码。
+    # 未设置时 config 的默认值为 "admin123"（仅限开发环境）。
+    from app.core.config import settings
     from app.core.security import hash_password
-    admin_hash = hash_password("admin123")
+    admin_hash = hash_password(settings.admin_default_password)
     op.execute(
         f"""
         INSERT INTO admin_users (username, password_hash, role, nickname)

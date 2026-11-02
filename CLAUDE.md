@@ -41,7 +41,7 @@ docker compose down
 - API: http://localhost:8888
 - API 文档 (Swagger): http://localhost:8888/docs
 - Kafka UI: http://localhost:9090
-- 管理后台: http://localhost （需 `--web` / `with-nginx` profile；默认账号 `admin` / `admin123`）
+- 管理后台: http://localhost （需 `--web` / `with-nginx` profile；用户名 `admin`，密码取自 `.env` 的 `ADMIN_DEFAULT_PASSWORD`，默认 `admin123` 仅限开发环境）
 
 ### 本地开发（脱离 docker）
 

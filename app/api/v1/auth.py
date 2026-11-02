@@ -78,15 +78,16 @@ async def login(request: Request, body: LoginRequest, db: Session = Depends(get_
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
 
-    # 检查是否使用默认密码，返回安全警告
-    # default_password_hash 已缓存 bcrypt 计算（进程级一次），
-    # 直接比对两个 hash 是否相等（bcrypt hash 自带 salt，
-    # 自始至终只用一次 checkpw，避免每次登录重新计算哈希）
+    # 检查是否仍在使用初始密码，返回安全警告
+    #
+    # 注意: bcrypt 每次加盐结果都不同，**不能用 == 比较哈希字符串**
+    # (那样永远为 False，警告形同虚设)。必须用 checkpw 校验。
     password_warning = None
-    cached_hash = settings.default_password_hash
-    if cached_hash and user.password_hash == cached_hash:
+    if settings.admin_default_password and verify_password(
+        settings.admin_default_password, user.password_hash
+    ):
         password_warning = (
-            f"【安全警告】您正在使用默认密码，存在安全风险。"
+            "【安全警告】您正在使用默认密码，存在安全风险。"
             "请立即修改密码：个人资料 → 修改密码"
         )
         logger.warning(
