@@ -1,0 +1,48 @@
+说明：本文件是 `scripts/deploy.sh` 的说明副本（不是可执行脚本）。
+权威版本以 `scripts/deploy.sh` 为准；两者不一致时以脚本的实际行为为准。
+
+scripts/deploy.sh
+
+用法:
+  bash scripts/deploy.sh          # 基础模式：API(8888) + Celery + Kafka consumers + PostgreSQL + Redis
+  bash scripts/deploy.sh --web    # 完整模式：以上全部 + 自动 npm build 管理前端 + Nginx(80/443)
+
+脚本流程:
+  1. 检查 .env 是否存在（不存在则提示 cp .env.example .env 并退出）
+  2. 创建必要目录: logs/ data/ backups/ docker/postgres/ docker/redis/ docker/nginx/conf.d/
+  3. 带 --web 时附加 --profile with-nginx，并提示前端构建方式
+  4. docker compose [PROFILE_ARGS] up -d
+  5. 等待 10 秒，打印 docker compose ps 服务状态
+  6. 打印访问入口与常用运维命令
+
+访问入口:
+  - API:        http://localhost:8888
+  - API 文档:   http://localhost:8888/docs
+  - Kafka UI:   http://localhost:9090
+  - 管理后台:   http://localhost        (仅 --web 模式，Nginx → Vue 3 前端)
+    默认账号:   admin / admin123
+    首次登录后请立即修改密码！
+
+  不带 --web 启动时脚本会提示: 💡 启用管理前端:  bash scripts/deploy.sh --web
+
+docker compose 服务清单（15 个）:
+  - postgres                   wechat-postgres                 5555
+  - redis                      wechat-redis                    6666
+  - zookeeper                  wechat-zookeeper                -
+  - kafka                      wechat-kafka                    9092/9093
+  - kafka-ui                   wechat-kafka-ui                 9090
+  - migrate                    wechat-migrate                  -    (一次性，执行 alembic upgrade heads)
+  - app (FastAPI)              wechat-app                      8888
+  - celery-worker              wechat-celery-worker            -
+  - celery-beat                wechat-celery-beat              -
+  - consumer-generate          wechat-consumer-generate        -
+  - consumer-push              wechat-consumer-push            -
+  - consumer-publish           wechat-consumer-publish         -
+  - consumer-toutiao-publish   wechat-consumer-toutiao-publish -
+  - build-web                  wechat-build-web                -    (with-nginx profile)
+  - nginx (可选)               wechat-nginx                    80/443 (with-nginx profile)
+
+常用运维命令:
+  📊 查看日志:      docker compose logs -f [service_name]
+  🛑 停止服务:      docker compose down
+  🔄 重启单服务:    docker compose restart app

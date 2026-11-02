@@ -1,0 +1,231 @@
+# 项目目录结构（由实际文件系统生成）
+# 排除: .git / __pycache__ / node_modules / logs / data / backups / .claude / .superpowers / .pytest_cache / web/dist / .env
+
+wechat-ai-publisher/
+├── alembic/
+│   ├── versions/
+│   │   ├── 2026_07_02_0000-0001_initial_schema.py
+│   │   ├── 2026_07_02_0001-0002_add_fk_and_unique_constraint.py
+│   │   ├── 2026_07_02_0002-0003_user_choice_unique_constraint.py
+│   │   ├── 2026_07_24_0000-0004_admin_config_tables.py
+│   │   ├── 2026_07_27_1053-5861f005e42d_sync_model_defaults_and_indexes_with_.py
+│   │   ├── 2026_08_10_0000-9916a663457e_add_platform_accounts.py
+│   │   ├── 2026_08_12_0000-a1b2c3d4e5f6_seed_all_platforms.py
+│   │   ├── 2026_08_13_0000_fix_baijiahao_typo.py
+│   │   ├── 2026_08_13_0001_migrate_keyword_hash_to_sha256.py
+│   │   ├── 2026_08_14_0000_create_llm_providers.py
+│   │   ├── 2026_10_12_0000_create_platform_ip_whitelist.py
+│   │   └── 2026_10_12_0001_merge_heads.py
+│   ├── env.py
+│   └── script.py.mako
+├── app/
+│   ├── api/
+│   │   ├── v1/
+│   │   │   ├── __init__.py
+│   │   │   ├── articles.py
+│   │   │   ├── auth.py
+│   │   │   ├── ip_whitelist.py
+│   │   │   ├── keyword_articles.py
+│   │   │   ├── llm_providers.py
+│   │   │   ├── platform_ip_whitelist.py
+│   │   │   ├── platforms.py
+│   │   │   ├── settings.py
+│   │   │   ├── tasks.py
+│   │   │   ├── topics.py
+│   │   │   └── webhook.py
+│   │   ├── __init__.py
+│   │   └── deps.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── circuit_breaker.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── jwt_auth.py
+│   │   ├── kafka_client.py
+│   │   ├── logging.py
+│   │   ├── pii.py
+│   │   ├── rate_limit.py
+│   │   ├── redis_client.py
+│   │   └── security.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── admin_user.py
+│   │   ├── article.py
+│   │   ├── ip_whitelist.py
+│   │   ├── llm_provider.py
+│   │   ├── platform.py
+│   │   ├── platform_ip_whitelist.py
+│   │   ├── system_setting.py
+│   │   ├── topic.py
+│   │   └── user.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── article.py
+│   │   ├── auth.py
+│   │   ├── common.py
+│   │   ├── ip_whitelist.py
+│   │   ├── keyword_article.py
+│   │   ├── llm_provider.py
+│   │   ├── platform.py
+│   │   ├── platform_ip_whitelist.py
+│   │   ├── setting.py
+│   │   ├── topic.py
+│   │   ├── user.py
+│   │   └── webhook.py
+│   ├── services/
+│   │   ├── llm_clients/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py
+│   │   │   ├── deepseek.py
+│   │   │   ├── minimax.py
+│   │   │   ├── openai.py
+│   │   │   └── qwen.py
+│   │   ├── platforms/
+│   │   │   ├── __init__.py
+│   │   │   ├── baijiahao_service.py
+│   │   │   ├── base.py
+│   │   │   ├── crawlers.py
+│   │   │   ├── douyin_service.py
+│   │   │   ├── toutiao_service.py
+│   │   │   ├── wechat_service.py
+│   │   │   ├── xiaohongshu_service.py
+│   │   │   └── youtube_service.py
+│   │   ├── __init__.py
+│   │   ├── article_generation.py
+│   │   ├── article_publishing.py
+│   │   ├── crawler.py
+│   │   ├── daily_digest.py
+│   │   ├── kafka_producer.py
+│   │   ├── llm_provider.py
+│   │   ├── push_notification.py
+│   │   └── wechat.py
+│   ├── tasks/
+│   │   ├── __init__.py
+│   │   ├── article_tasks.py
+│   │   ├── celery_app.py
+│   │   ├── crawl_tasks.py
+│   │   └── push_tasks.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── image.py
+│   │   └── markdown.py
+│   ├── __init__.py
+│   └── main.py
+├── consumers/
+│   ├── __init__.py
+│   ├── _dlq.py
+│   ├── generate_consumer.py
+│   ├── publish_consumer.py
+│   ├── push_consumer.py
+│   └── toutiao_publish_consumer.py
+├── docker/
+│   ├── nginx/
+│   │   ├── conf.d/
+│   │   │   └── app.conf
+│   │   └── nginx.conf
+│   ├── postgres/
+│   │   ├── init.sql/
+│   │   │   └── 01-extensions.sql
+│   │   └── postgresql.conf
+│   └── redis/
+├── docs/
+│   ├── DATA_FLOW.md
+│   ├── FLOW.md
+│   ├── OPERATIONS.md
+│   ├── OPERATIONS_GUIDE.md
+│   ├── OPTIMIZATION_ANALYSIS.md
+│   ├── PLATFORM_INTEGRATION.md
+│   ├── PROJECT_SUMMARY.md
+│   └── TECHNICAL_FLOW.md
+├── scripts/
+│   ├── _check_imports.py
+│   ├── backup.sh
+│   ├── build_web.sh
+│   ├── build_web_docker.sh
+│   ├── check_publish.sh
+│   ├── db_autogen.sh
+│   ├── db_check.sh
+│   ├── db_migrate.sh
+│   ├── deploy.sh
+│   ├── e2e_verify.sh
+│   ├── entrypoint.sh
+│   ├── manage.sh
+│   ├── post_rebuild_check.sh
+│   ├── run_flow.sh
+│   ├── smoke_inspect.sh
+│   ├── smoke_test.sh
+│   ├── smoke_test_e2e.sh
+│   ├── status_check.sh
+│   └── trigger_crawl.sh
+├── ssl/
+├── static/
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_api.py
+│   └── test_services.py
+├── web/
+│   ├── src/
+│   │   ├── api/
+│   │   │   ├── articles.ts
+│   │   │   ├── auth.ts
+│   │   │   ├── client.ts
+│   │   │   ├── ipWhitelist.ts
+│   │   │   ├── keywordArticles.ts
+│   │   │   ├── llmProviders.ts
+│   │   │   ├── platformIpWhitelist.ts
+│   │   │   ├── platforms.ts
+│   │   │   └── settings.ts
+│   │   ├── components/
+│   │   │   ├── AccountCard.vue
+│   │   │   ├── AccountFormDialog.vue
+│   │   │   ├── ConfigForm.vue
+│   │   │   └── MainLayout.vue
+│   │   ├── router/
+│   │   │   └── index.ts
+│   │   ├── stores/
+│   │   │   └── user.ts
+│   │   ├── styles/
+│   │   │   └── global.css
+│   │   ├── utils/
+│   │   │   └── jwt.ts
+│   │   ├── views/
+│   │   │   ├── Dashboard.vue
+│   │   │   ├── DeepSeekConfig.vue
+│   │   │   ├── HotReportBuilder.vue
+│   │   │   ├── IPWhitelist.vue
+│   │   │   ├── KeywordArticleBuilder.vue
+│   │   │   ├── LLMProviders.vue
+│   │   │   ├── Login.vue
+│   │   │   ├── PlatformAccounts.vue
+│   │   │   ├── PlatformIpWhitelist.vue
+│   │   │   ├── Profile.vue
+│   │   │   ├── SchedulerConfig.vue
+│   │   │   ├── ToutiaoHotTopics.vue
+│   │   │   ├── UserManagement.vue
+│   │   │   └── WeChatConfig.vue
+│   │   ├── App.vue
+│   │   ├── env.d.ts
+│   │   └── main.ts
+│   ├── .gitignore
+│   ├── Dockerfile.web
+│   ├── index.html
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── .env.example
+├── .gitignore
+├── CLAUDE.md
+├── Dockerfile
+├── LICENSE
+├── Makefile
+├── README.md
+├── alembic.ini
+├── deploy.md
+├── docker-compose.yml
+├── requirements.txt
+├── start.txt
+├── test_baidu_login.py
+└── tree.txt
