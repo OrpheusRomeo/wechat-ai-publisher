@@ -475,21 +475,15 @@ def test_runtime_override_casting():
 def test_runtime_override_applies_whitelisted_keys(monkeypatch):
     from app.core import runtime_overrides
 
-    class _Row:
-        def __init__(self, key, value, is_secret=False):
-            self.key = key
-            self.value_encrypted = value
-            self.is_secret = is_secret
-
     monkeypatch.setattr(
         runtime_overrides,
         "_read_rows",
         lambda: [
-            _Row("wechat_daily_publish_quota", "4"),
-            _Row("wechat_enable_custom_message", "false"),
-            _Row("scheduler_topic_limit", "20"),
-            _Row("wechat_app_id", ""),          # 空值不覆盖
-            _Row("not_a_setting", "x"),         # 不在白名单
+            ("wechat_daily_publish_quota", "4", False),
+            ("wechat_enable_custom_message", "false", False),
+            ("scheduler_topic_limit", "20", False),
+            ("wechat_app_id", "", True),        # 空值不覆盖
+            ("not_a_setting", "x", False),      # 不在白名单
         ],
     )
     monkeypatch.setattr(settings, "wechat_daily_publish_quota", 1)
@@ -582,3 +576,45 @@ def test_default_password_hash_is_removed():
     from app.core.config import Settings
 
     assert not hasattr(Settings, "default_password_hash")
+
+
+def test_read_rows_returns_plain_values_not_detached_orm(monkeypatch):
+    """回归: _read_rows 必须在 session 关闭前把字段取成普通值。
+
+    若返回 ORM 实体, session 关闭后访问 row.key 会抛
+    ``DetachedInstanceError`` → 应用启动失败
+    (这个 bug 曾让 app 容器起不来)。
+    """
+    from app.core import runtime_overrides
+
+    class _FakeRow:
+        """模拟 ORM 实体: session 关闭后属性访问会 detached 报错。"""
+
+        def __init__(self, key, value_encrypted, is_secret):
+            self.key = key
+            self.value_encrypted = value_encrypted
+            self.is_secret = is_secret
+
+    class _FakeQuery:
+        def all(self):
+            return [_FakeRow("wechat_daily_publish_quota", "4", False)]
+
+    class _FakeSession:
+        def query(self, *_args, **_kwargs):
+            return _FakeQuery()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    # session_scope 在 _read_rows 内部延迟导入, 因此 patch 数据库模块
+    from app.core import database
+    monkeypatch.setattr(database, "session_scope", lambda: _FakeSession())
+
+    rows = runtime_overrides._read_rows()
+
+    # 必须是普通三元组, 而不是 ORM 实体
+    assert rows == [("wechat_daily_publish_quota", "4", False)]
+    assert isinstance(rows[0], tuple)

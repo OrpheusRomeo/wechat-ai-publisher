@@ -340,7 +340,9 @@ services:
       --without-mingle
       --without-heartbeat
     healthcheck:
-      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping", "-t", "3", "-d", "celery@%h"]
+      # 用 CMD-SHELL 才能让 docker 替换 %h; 节点名前缀须与 entrypoint 的
+      # --hostname=worker@%h 一致 (写成 celery@%h 永远匹配不到)
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -t 3 -d worker@$(hostname) >/dev/null"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -407,7 +409,8 @@ services:
       - wechat-network
     command: python -m consumers.generate_consumer
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python -m consumers.generate_consumer' >/dev/null"]
+      # slim 镜像里没有 pgrep, 用 /proc 扫 cmdline 判断进程存活
+      test: ["CMD-SHELL", "grep -qs 'consumers.generate_consumer' /proc/*/cmdline"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -440,7 +443,8 @@ services:
       - wechat-network
     command: python -m consumers.publish_consumer
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python -m consumers.publish_consumer' >/dev/null"]
+      # slim 镜像里没有 pgrep, 用 /proc 扫 cmdline 判断进程存活
+      test: ["CMD-SHELL", "grep -qs 'consumers.publish_consumer' /proc/*/cmdline"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -470,7 +474,8 @@ services:
       - wechat-network
     command: python -m consumers.push_consumer
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python -m consumers.push_consumer' >/dev/null"]
+      # slim 镜像里没有 pgrep, 用 /proc 扫 cmdline 判断进程存活
+      test: ["CMD-SHELL", "grep -qs 'consumers.push_consumer' /proc/*/cmdline"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -501,7 +506,8 @@ services:
       - wechat-network
     command: python -m consumers.toutiao_publish_consumer
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'python -m consumers.toutiao_publish_consumer' >/dev/null"]
+      # slim 镜像里没有 pgrep, 用 /proc 扫 cmdline 判断进程存活
+      test: ["CMD-SHELL", "grep -qs 'consumers.toutiao_publish_consumer' /proc/*/cmdline"]
       interval: 30s
       timeout: 5s
       retries: 5

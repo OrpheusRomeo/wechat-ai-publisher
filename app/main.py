@@ -14,6 +14,7 @@ from slowapi.util import get_remote_address
 
 from app.core.config import settings
 from app.core.database import init_db
+from app.core.logging import configure_logging
 from app.core.rate_limit import limiter  # #12 全局限流器
 from app.core.redis_client import redis_client
 from app.core.runtime_overrides import apply_runtime_overrides
@@ -25,6 +26,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期"""
+    # 统一日志格式与级别: 不调的话 root logger 没有 handler,
+    # 应用自己的 INFO 日志会被静默丢弃 (只看到 WARNING 及以上)。
+    configure_logging()
     logger.info("应用启动中...")
 
     # ⚠️ 安全警告: 检测到默认密码

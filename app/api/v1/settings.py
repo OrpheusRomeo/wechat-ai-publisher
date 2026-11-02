@@ -30,14 +30,19 @@ router = APIRouter(
 
 
 def _to_item(s: SystemSetting) -> SettingItem:
-    """将 DB 行转为前端展示结构。"""
+    """将 DB 行转为前端展示结构。
+
+    注意: 只有 ``is_secret=True`` 的行才存密文。非密文行（如默认封面 URL、
+    每日配额）**明文**存在 ``value_encrypted`` 列里 —— 对它们调用
+    ``decrypt_value`` 只会白打一条「解密失败」的警告日志。
+    """
     value_display = ""
     if s.is_secret:
         plain = decrypt_value(s.value_encrypted)
         # 值为空时不要沿用种子数据里的占位掩码（那会让人以为凭据已配好）
         value_display = (s.value_masked or mask_value(plain)) if plain else ""
     else:
-        value_display = decrypt_value(s.value_encrypted) or s.value_encrypted
+        value_display = s.value_encrypted or ""
     return SettingItem(
         key=s.key,
         value=value_display,

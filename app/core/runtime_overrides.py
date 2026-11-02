@@ -78,12 +78,20 @@ def _cast(kind: str, raw: str) -> Optional[Any]:
 
 
 def _read_rows() -> list:
-    """读取 system_settings 全部行（延迟导入，避免模块级循环依赖）。"""
+    """读取 system_settings 的 (key, value, is_secret) 三元组列表。
+
+    必须在 session 关闭**之前**把需要的字段取成普通值: ORM 实体的属性在
+    session 关闭后会变成 detached, 之后再访问 ``row.key`` 会抛
+    ``DetachedInstanceError``。
+    """
     from app.core.database import session_scope
     from app.models.system_setting import SystemSetting
 
     with session_scope() as db:
-        return db.query(SystemSetting).all()
+        return [
+            (row.key, row.value_encrypted, row.is_secret)
+            for row in db.query(SystemSetting).all()
+        ]
 
 
 def apply_runtime_overrides(
@@ -97,7 +105,7 @@ def apply_runtime_overrides(
         ttl_seconds: 两次读库之间的最小间隔（秒）。
 
     Returns:
-        实际应用的配置条数（缓存命中时返回 0）。
+        实际应用的配置项数（缓存命中时返回 0）。
     """
     global _last_applied_at
 
@@ -120,16 +128,16 @@ def apply_runtime_overrides(
         return 0
 
     applied = 0
-    for row in rows:
-        kind = _OVERRIDABLE.get(row.key)
+    for key, value_encrypted, is_secret in rows:
+        kind = _OVERRIDABLE.get(key)
         if kind is None:
             continue
 
         # 注意字段命名：非敏感项明文存在 value_encrypted，敏感项存密文
-        if row.is_secret:
-            raw = decrypt_value(row.value_encrypted)
+        if is_secret:
+            raw = decrypt_value(value_encrypted)
         else:
-            raw = row.value_encrypted or ""
+            raw = value_encrypted or ""
         raw = (raw or "").strip()
         if not raw:
             continue
@@ -137,11 +145,11 @@ def apply_runtime_overrides(
         value = _cast(kind, raw)
         if value is None:
             logger.warning(
-                "system_settings[%s] 取值非法, 已忽略: %r", row.key, raw,
+                "system_settings[%s] 取值非法, 已忽略: %r", key, raw,
             )
             continue
 
-        setattr(settings, row.key, value)
+        setattr(settings, key, value)
         applied += 1
 
     if applied:
