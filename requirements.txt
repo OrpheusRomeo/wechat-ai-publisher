@@ -1,0 +1,51 @@
+# requirements.txt - Python 依赖
+# 依赖清单与代码导入一一对应；删改前请先确认无引用
+# （grep -r "import <pkg>" app/ consumers/ tests/ scripts/ alembic/）
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 数据库（同步 SQLAlchemy 引擎，走 psycopg2 驱动）
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.0
+
+# Redis
+redis==5.0.1
+hiredis==2.3.2
+
+# Kafka 客户端：confluent-kafka (基于 librdkafka)
+# 服务端使用 confluentinc/cp-kafka:7.2.1，与 librdkafka 完全兼容
+confluent-kafka==2.5.3
+
+# Celery
+celery==5.3.4
+
+# HTTP
+# httpx 供 fastapi.testclient.TestClient 使用；业务请求走 requests
+httpx==0.25.1
+requests==2.31.0
+# urllib3 被 llm_clients/base.py 直接 import（Retry），显式声明
+urllib3==2.2.3
+
+# 图片处理
+Pillow==10.2.0
+
+# Utils
+python-dotenv==1.0.0
+python-multipart==0.0.6
+
+# Auth（JWT 用 PyJWT，不使用 python-jose）
+PyJWT==2.8.0
+bcrypt==4.0.1
+
+# Encryption (Fernet，用于加密数据库中存储的敏感配置)
+cryptography==41.0.7
+
+# 测试
+pytest==7.4.3
+pytest-cov==4.1.0
+
+# 限流 (#12: 防止 LLM API 被恶意刷量)
+slowapi==0.1.9

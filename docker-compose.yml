@@ -1,0 +1,580 @@
+# docker-compose.yml
+# 修复: 之前 ``version: '3.8'`` 在 docker compose v2 里是 obsolete 字段, 启动/每条
+# ``docker compose exec`` 都会喷一行 WARN. 删掉.
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+x-app-env: &app-env
+  # 应用配置
+  APP_ENV: ${APP_ENV:-production}
+  DEBUG: ${DEBUG:-false}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+  APP_HOST: ${APP_HOST:-0.0.0.0}
+  APP_PORT: ${APP_PORT:-8888}
+  # 时区：所有时间计算以此为准，影响 Celery 调度、数据库会话等
+  TIMEZONE: ${TIMEZONE:-Asia/Shanghai}
+  # 修复: 之前 x-app-env 没列 ADMIN_API_KEY / PII_LOG_SALT,
+  # 导致即使 .env 写了这两个, alembic / app 容器也读不到,
+  # 进而报 ``admin_api_key Field required``.
+  # 加上 placeholder 默认值, 部署时 .env 覆盖即可.
+  ADMIN_API_KEY: ${ADMIN_API_KEY:-please-generate-with-secrets.token_urlsafe-32}
+  PII_LOG_SALT: ${PII_LOG_SALT:-please-random-salt-at-least-8-chars}
+
+  # JWT + 加密
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+  FERNET_KEY: ${FERNET_KEY:-}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+  REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+  # ⚠️ 生产环境必须修改! 默认密码 admin123 仅限开发/演示环境
+  ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-admin123}
+
+  # IP 白名单 (docker 内部网络自动信任)
+  IP_WHITELIST_ENABLED: ${IP_WHITELIST_ENABLED:-true}
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.25.0.0/16}
+
+  # PostgreSQL
+  PG_HOST: ${PG_HOST:-postgres}
+  PG_PORT: ${PG_PORT:-5555}
+  PG_USER: ${PG_USER:-wechat_user}
+  PG_PASSWORD: ${PG_PASSWORD:-wechat_password}
+  PG_DB: ${PG_DB:-wechat_ai_publisher}
+
+  # Redis
+  REDIS_HOST: ${REDIS_HOST:-redis}
+  REDIS_PORT: ${REDIS_PORT:-6666}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
+  REDIS_DB: ${REDIS_DB:-0}
+  REDIS_CELERY_DB: ${REDIS_CELERY_DB:-1}
+  REDIS_CACHE_DB: ${REDIS_CACHE_DB:-2}
+  
+  # Kafka
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9093}
+  KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-wechat-consumer-group}
+  KAFKA_TOPIC_CRAWL: ${KAFKA_TOPIC_CRAWL:-crawl-topics}
+  KAFKA_TOPIC_GENERATE: ${KAFKA_TOPIC_GENERATE:-generate-articles}
+  KAFKA_TOPIC_PUSH: ${KAFKA_TOPIC_PUSH:-push-notifications}
+  KAFKA_TOPIC_PUBLISH: ${KAFKA_TOPIC_PUBLISH:-publish-articles}
+  
+  # Celery
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://:redis_password@redis:6666/1}
+  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://:redis_password@redis:6666/2}
+  
+  # DeepSeek
+  DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+  DEEPSEEK_API_URL: ${DEEPSEEK_API_URL:-https://api.deepseek.com/v1}
+  DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+  DEEPSEEK_TEMPERATURE: ${DEEPSEEK_TEMPERATURE:-0.7}
+  DEEPSEEK_MAX_TOKENS: ${DEEPSEEK_MAX_TOKENS:-3000}
+  DEEPSEEK_TIMEOUT: ${DEEPSEEK_TIMEOUT:-60}
+  
+  # 微信
+  WECHAT_APP_ID: ${WECHAT_APP_ID}
+  WECHAT_APP_SECRET: ${WECHAT_APP_SECRET}
+  WECHAT_TOKEN: ${WECHAT_TOKEN}
+  WECHAT_API_URL: ${WECHAT_API_URL:-https://api.weixin.qq.com}
+  WECHAT_TIMEOUT: ${WECHAT_TIMEOUT:-30}
+  WECHAT_DAILY_PUBLISH_QUOTA: ${WECHAT_DAILY_PUBLISH_QUOTA:-1}
+  WECHAT_ENABLE_CUSTOM_MESSAGE: ${WECHAT_ENABLE_CUSTOM_MESSAGE:-true}
+  WECHAT_DEFAULT_COVER_URL: ${WECHAT_DEFAULT_COVER_URL:-https://picsum.photos/seed/wechat-digest/900/383}
+  WECHAT_DIGEST_COLOR_TITLE: ${WECHAT_DIGEST_COLOR_TITLE:-#2C5F8D}
+  WECHAT_DIGEST_COLOR_BRIEF: ${WECHAT_DIGEST_COLOR_BRIEF:-#5F8D4E}
+  WECHAT_DIGEST_COLOR_LINK: ${WECHAT_DIGEST_COLOR_LINK:-#7D2E8E}
+
+  # 调度配置
+  SCHEDULER_CRAWL_TIME: ${SCHEDULER_CRAWL_TIME:-08:00}
+  SCHEDULER_PUSH_TIME: ${SCHEDULER_PUSH_TIME:-09:00}
+  SCHEDULER_TOPIC_LIMIT: ${SCHEDULER_TOPIC_LIMIT:-10}
+  BAIDU_HOT_USE_MOCK: ${BAIDU_HOT_USE_MOCK:-false}
+  
+  # 功能开关
+  ENABLE_CRAWLER: ${ENABLE_CRAWLER:-true}
+  ENABLE_WECHAT_PUSH: ${ENABLE_WECHAT_PUSH:-true}
+  ENABLE_AUTO_PUBLISH: ${ENABLE_AUTO_PUBLISH:-true}
+  ENABLE_DEEPSEEK: ${ENABLE_DEEPSEEK:-true}
+  ENABLE_KAFKA: ${ENABLE_KAFKA:-true}
+  ENABLE_CELERY: ${ENABLE_CELERY:-true}
+  
+  # 时区
+  TZ: Asia/Shanghai
+
+  # CORS 允许来源（支持 JSON 数组或逗号分隔字符串）
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:5173,http://localhost:3333}
+
+services:
+  # ==================== PostgreSQL ====================
+  postgres:
+    image: postgres:15-alpine
+    container_name: wechat-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-wechat_user}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-wechat_password}
+      POSTGRES_DB: ${PG_DB:-wechat_ai_publisher}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: Asia/Shanghai
+    ports:
+      - "${PG_PORT:-5555}:5555"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      # 修复: 之前 mount 到文件路径, 但 ./docker/postgres/init.sql 是目录,
+      # 容器里 psql 报 "Is a directory". 改成挂到目录, 官方 entrypoint 会执行
+      # 下属所有 *.sql / *.sh。
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    networks:
+      - wechat-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -p ${PG_PORT:-5555} -U ${PG_USER:-wechat_user} -d ${PG_DB:-wechat_ai_publisher}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # ==================== Redis ====================
+  #
+  redis:
+    image: redis:7.2-alpine
+    container_name: wechat-redis
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${REDIS_PORT:-6666}:6666"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - redis_data:/data
+    command: >
+      redis-server
+      --port 6666
+      --bind 0.0.0.0
+      --protected-mode no
+      --requirepass ${REDIS_PASSWORD:-redis_password}
+      --appendonly yes
+    networks:
+      - wechat-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "${REDIS_PORT:-6666}", "--pass", "${REDIS_PASSWORD:-redis_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # ==================== Zookeeper ====================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.4
+    container_name: wechat-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      TZ: Asia/Shanghai
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - wechat-network
+    healthcheck:
+      # bash 内置 /dev/tcp 检测端口连通性，不依赖 nc
+      test: ["CMD-SHELL", "timeout 3 bash -c 'echo > /dev/tcp/127.0.0.1/2181'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  # ==================== Kafka ====================
+  kafka:
+    image: confluentinc/cp-kafka:7.2.1
+    container_name: wechat-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+      - "${KAFKA_INTERNAL_PORT:-9093}:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:${KAFKA_PORT:-9092},PLAINTEXT_INTERNAL://kafka:${KAFKA_INTERNAL_PORT:-9093}
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:${KAFKA_PORT:-9092},PLAINTEXT_INTERNAL://0.0.0.0:${KAFKA_INTERNAL_PORT:-9093}
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: ${KAFKA_NUM_PARTITIONS:-3}
+      KAFKA_LOG_RETENTION_HOURS: ${KAFKA_LOG_RETENTION_HOURS:-168}
+      KAFKA_LOG_SEGMENT_BYTES: ${KAFKA_LOG_SEGMENT_BYTES:-1073741824}
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_DELETE_TOPIC_ENABLE: 'true'
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_COMPRESSION_TYPE: snappy
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      TZ: Asia/Shanghai
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - wechat-network
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/bin/kafka-topics --bootstrap-server localhost:${KAFKA_PORT:-9092} --list >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+    logging: *default-logging
+
+  # ==================== Kafka UI ====================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.1
+    container_name: wechat-kafka-ui
+    restart: unless-stopped
+    ports:
+      - "${KAFKA_UI_PORT:-9090}:8080"
+    environment:
+      TZ: Asia/Shanghai
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:${KAFKA_INTERNAL_PORT:-9093}
+      KAFKA_CLUSTERS_0_READONLY: "false"
+    depends_on:
+      - kafka
+    networks:
+      - wechat-network
+    logging: *default-logging
+
+  # ==================== FastAPI App ====================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-app
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    ports:
+      - "${APP_PORT:-8888}:8888"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - wechat-network
+    command: >
+      sh -c "
+        python -c 'from app.core.kafka_client import init_topics; init_topics()' &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8888 --workers ${WORKER_CONCURRENCY:-4} --log-level $(echo "${LOG_LEVEL:-info}" | tr '[:upper:]' '[:lower:]')
+      "
+    logging: *default-logging
+
+  # ==================== DB Migrate (one-shot) ====================
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-migrate
+    environment:
+      <<: *app-env
+    volumes:
+      - ./app:/app/app
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - wechat-network
+    command: ["alembic", "upgrade", "heads"]
+    logging: *default-logging
+    restart: "no"
+
+  # ==================== Celery Worker ====================
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-celery-worker
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./app:/app/app
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - wechat-network
+    command: >
+      celery -A app.tasks.celery_app worker
+      --loglevel=${LOG_LEVEL:-info}
+      --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
+      --pool=${CELERY_WORKER_POOL:-threads}
+      --queues=crawl,article,push,default
+      --hostname=worker@%h
+      --without-gossip
+      --without-mingle
+      --without-heartbeat
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping", "-t", "3", "-d", "celery@%h"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ==================== Celery Beat (Scheduler) ====================
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-celery-beat
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - celerybeat_data:/var/lib/celerybeat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - wechat-network
+    command: >
+      celery -A app.tasks.celery_app beat
+      --loglevel=${LOG_LEVEL:-info}
+      -s /var/lib/celerybeat/celerybeat-schedule
+      --pidfile=/var/lib/celerybeat/celerybeat.pid
+    healthcheck:
+      # beat 没有 inspect 接口，用 pidfile 探测其进程存活
+      test: ["CMD-SHELL", "test -f /var/lib/celerybeat/celerybeat.pid && kill -0 $(cat /var/lib/celerybeat/celerybeat.pid)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ==================== Kafka Consumer - Article Generate ====================
+  consumer-generate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-consumer-generate
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - wechat-network
+    command: python -m consumers.generate_consumer
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python -m consumers.generate_consumer' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ==================== Kafka Consumer - Article Publish ====================
+  consumer-publish:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-consumer-publish
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    volumes:
+      - ./app:/app/app
+      - ./consumers:/app/consumers
+      - ./logs:/app/logs
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - wechat-network
+    command: python -m consumers.publish_consumer
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python -m consumers.publish_consumer' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ==================== Kafka Consumer - Push Notification ====================
+  consumer-push:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-consumer-push
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - wechat-network
+    command: python -m consumers.push_consumer
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python -m consumers.push_consumer' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ==================== Kafka Consumer - Toutiao/Multi-platform Publish ====================
+  consumer-toutiao-publish:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat-consumer-toutiao-publish
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+    volumes:
+      - ./app:/app/app
+      - ./consumers:/app/consumers
+      - ./logs:/app/logs
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - wechat-network
+    command: python -m consumers.toutiao_publish_consumer
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python -m consumers.toutiao_publish_consumer' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ==================== Web Builder (one-shot) ====================
+  # 使用专用 Dockerfile 多阶段构建, 避免把源码挂到容器可写目录.
+  # 产物写到 web_dist 命名卷, 给 nginx 容器挂载.
+  build-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.web
+      args:
+        # 用 BuildKit cache 加速, 国内镜像
+        NPM_REGISTRY: https://registry.npmmirror.com
+        # 留空时由 Dockerfile.web 的 RUN 兜底生成 UTC 时间
+        BUILD_TIMESTAMP: ${WEB_BUILD_TIMESTAMP:-}
+    image: wechat-web-builder:latest
+    container_name: wechat-build-web
+    volumes:
+      - web_dist:/out
+    # 用镜像默认 CMD (cp /app/dist/. /out/), 不要覆盖 command
+    networks:
+      - wechat-network
+    restart: "no"
+    profiles:
+      - with-nginx
+
+  # ==================== Nginx ====================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: wechat-nginx
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - web_dist:/usr/share/nginx/html:ro
+    depends_on:
+      app:
+        condition: service_started
+      build-web:
+        condition: service_completed_successfully
+    networks:
+      - wechat-network
+    logging: *default-logging
+    profiles:
+      - with-nginx
+
+networks:
+  wechat-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local
+  celerybeat_data:
+    driver: local
+  web_dist:
+    driver: local
+
