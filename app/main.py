@@ -59,6 +59,27 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+@app.middleware("http")
+async def _sync_runtime_settings(request: Request, call_next):
+    """每个请求前把管理后台配置同步到运行时 settings。
+
+    为什么需要: uvicorn 以 ``--workers N`` 启动时是 **N 个独立进程**,
+    各自持有一份 ``settings`` 单例。管理后台改配置后, 只有处理该次
+    ``PUT /settings/{key}`` 请求的那个 worker 会更新, 其余 worker 仍持有
+    旧值 → 同一台机器上不同请求读到的配置不一致。
+
+    ``apply_runtime_overrides()`` 自带 15s TTL 缓存, 所以并不会每个请求
+    都查库 (最多 15 秒查一次), 代价可忽略。
+    """
+    try:
+        apply_runtime_overrides()
+    except Exception:  # noqa: BLE001
+        # 配置同步失败不应影响业务请求
+        logger.warning("同步 system_settings 到运行时失败", exc_info=True)
+    return await call_next(request)
+
+
 # CORS
 app.add_middleware(
     CORSMiddleware,

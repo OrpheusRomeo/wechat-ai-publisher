@@ -618,3 +618,41 @@ def test_read_rows_returns_plain_values_not_detached_orm(monkeypatch):
     # 必须是普通三元组, 而不是 ORM 实体
     assert rows == [("wechat_daily_publish_quota", "4", False)]
     assert isinstance(rows[0], tuple)
+
+
+def test_all_models_are_registered_in_package_init():
+    """回归: app.models.__init__ 必须导出**全部** model。
+
+    SQLAlchemy 的 relationship("PlatformAccount") 用字符串指定目标类,
+    要求目标类已注册到同一 registry。若只导出了部分 model, 任何进程在
+    首次查询触发 mapper 配置时就会抛 InvalidRequestError
+    ("expression 'PlatformAccount' failed to locate a name")。
+    该错误在容器里表现为运行时配置覆盖静默失败, 极难定位。
+    """
+    import app.models as models
+    from app.models import (
+        AdminUser,
+        GeneratedArticle,
+        HotTopic,
+        IPWhitelist,
+        LLMProvider,
+        Platform,
+        PlatformAccount,
+        PlatformIPWhitelist,
+        SystemSetting,
+        UserChoice,
+        UserSubscription,
+    )
+
+    for cls in (
+        HotTopic, UserChoice, GeneratedArticle, UserSubscription,
+        AdminUser, IPWhitelist, LLMProvider,
+        Platform, PlatformAccount, PlatformIPWhitelist,
+        SystemSetting,
+    ):
+        assert cls.__name__ in models.__all__, f"{cls.__name__} 未导出"
+        assert getattr(models, cls.__name__) is cls
+
+    # 关键: relationship 的目标类必须能通过 registry 解析到
+    from sqlalchemy.orm import configure_mappers
+    configure_mappers()  # 解析失败会抛 InvalidRequestError
